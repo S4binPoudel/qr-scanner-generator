@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>QR Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #121212;
+      color: #f0f0f0;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    nav a {
+      margin: 0 10px;
+      text-decoration: none;
+      color: #00c8ff;
+      font-weight: bold;
+    }
+
+   video {
+  width: 90%;
+  max-width: 320px; /* Smaller than before */
+ max-height: 240px;
+  border: 1px solid #888;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+
+
+    input[type="file"] {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #1e1e1e;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background-color: #444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #result {
+      margin-top: 15px;
+      font-weight: bold;
+      color: #00c8ff;
+      word-break: break-all;
+    }
+
+    #result a {
+      color: #66d9ff;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>QR Code Scanner</h1>
+  <nav>
+    <a href="generate.html">Create</a>
+  </nav>
+
+  <video id="video" autoplay playsinline muted></video>
+  <br>
+  <input type="file" id="uploadImage" accept="image/*" />
+  <canvas id="canvas" style="display: none;"></canvas>
+  <div id="result">– scanning –</div>
+  <br>
+  <button onclick="startCamera()">Start Camera</button>
+  <button onclick="stopCamera()">Stop Camera</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const resultEl = document.getElementById("result");
+
+    let stream = null;
+    let scanLoop = null;
+
+    function makeClickable(text) {
+      const urlPattern = /(https?:\/\/[^\s]+)/g;
+      return text.replace(urlPattern, url => `<a href="${url}" target="_blank">${url}</a>`);
+    }
+
+    async function startCamera() {
+      resultEl.textContent = "– scanning –";
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+        await video.play();
+        scanLoop = setInterval(scanQR, 200);
+      } catch (err) {
+        resultEl.textContent = "Camera error: " + err.message;
+      }
+    }
+
+    function scanQR() {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imgData.data, canvas.width, canvas.height, { inversionAttempts: "attemptBoth" });
+      if (code) {
+        showResult(code.data);
+        stopCamera();
+      }
+    }
+
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      clearInterval(scanLoop);
+    }
+
+    function showResult(text) {
+      // raw text, clickable if URL
+      resultEl.innerHTML = makeClickable(text);
+    }
+
+    document.getElementById("uploadImage").addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = () => {
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imgData.data, canvas.width, canvas.height);
+          if (code) {
+            showResult(code.data);
+          } else {
+            resultEl.textContent = "No QR code found.";
+          }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  </script>
+</body>
+</html>
